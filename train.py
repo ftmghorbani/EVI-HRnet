@@ -22,7 +22,7 @@ from data_loader.data_loaders import MaskedFrameDataLoader
 import source.loss as module_loss
 import source.metric as module_metric
 from source.model import VideoInpaintingModel
-
+import json
 
 
 
@@ -189,7 +189,8 @@ class BaseTrainer:
         # setup visualization writer instance
         writer_dir = os.path.join(log_dir, name, start_time)
         self.writer = WriterTensorboardX(writer_dir, self.logger, tensorboardX)
-        #update dict
+        
+        #update dict according to the config file
         config_dict = {
                 'trainer': {
                     'monitor': self.monitor,
@@ -501,11 +502,22 @@ class Trainer(BaseTrainer):
                     self.logger.debug(f"Saving batch {batch_idx} input to {output_dir}")
                     save_frames_to_dir([self.toPILImage(t) for t in inputs.cpu()], output_dir)
 
+                    # to save targets:
+                    output_dir_targets = os.path.join(output_root_dir, 'targets', f"target_{batch_idx:04}")
+                    self.logger.debug(f"Saving batch {batch_idx} targets to {output_dir_targets}")
+                    save_frames_to_dir([self.toPILImage(t) for t in targets], output_dir_targets)
+
+
                 if epoch is not None and epoch % 5 == 0:
                     # Save test results to output_dir
                     output_dir = os.path.join(output_root_dir, f"result_{batch_idx:04}")
                     self.logger.debug(f"Saving batch {batch_idx} to {output_dir}")
                     save_frames_to_dir([self.toPILImage(t) for t in outputs], output_dir)
+
+                    # to save targets:
+                    output_dir_targets = os.path.join(output_root_dir, 'targets', f"target_{batch_idx:04}")
+                    self.logger.debug(f"Saving batch {batch_idx} targets to {output_dir_targets}")
+                    save_frames_to_dir([self.toPILImage(t) for t in targets], output_dir_targets)
 
                 if self.evaluate_score:
                     # Evaluate scores
@@ -848,35 +860,16 @@ class Trainer(BaseTrainer):
 
 
 #torch.cuda.empty_cache()
+    
+# Read JSON config file
+with open('config.json', 'r') as f:
+    config = json.load(f)
 
-model = VideoInpaintingModel({'norm': 'SN', 'nf': 64, 'bias': True, 'conv_type': 'gated', 'conv_by': '2dtsm', 'temporal_discriminator': False, 'spatial_discriminator': False}, nc_in=5, nc_out=3, nc_ref=3, d_s_args={"nf": 64,
-                "use_sigmoid": True,
-                "norm": "SN"}, d_t_args={"nf": 64,
-                "use_sigmoid": True,
-                "norm": "SN",
-                "conv_type": "vanilla",
-                "conv_by": "2dtsm"})
+model_config = config['model_config']
+model = VideoInpaintingModel(model_config)
 
 model.summary()
-#for bboxes:
-losses = {
-    "StyleLoss": (module_loss.StyleLoss(), 10),
-    "VGGLoss": (module_loss.VGGLoss(), 1.0),
-    "ExpressionLoss": (module_loss.ExpressionLoss(), 2),
-    "ReconLoss": (module_loss.ReconLoss(masked=False), 1.0),
-    "ReconLoss": (module_loss.ReconLoss(masked=True), 0),
-    "CompleteFramesReconLoss": (module_loss.CompleteFramesReconLoss(), 1.0),
-}
 
-""" #for curves:
-losses = {
-    "StyleLoss": (module_loss.StyleLoss(), 10),
-    "VGGLoss": (module_loss.VGGLoss(), 1.0),
-    "ExpressionLoss": (module_loss.ExpressionLoss(), 8),
-    "ReconLoss": (module_loss.ReconLoss(masked=False), 1.0),
-    "ReconLoss": (module_loss.ReconLoss(masked=True), 0),
-    "CompleteFramesReconLoss": (module_loss.CompleteFramesReconLoss(), 1.0),
-} """
 metrics = [module_metric.L2_loss]
 
 g_params = []
@@ -892,9 +885,10 @@ for name, param in model.named_parameters():
     else:
         g_params.append(param)
 
+
 # Replace these lines with your desired optimizer settings
 optimizer_type = torch.optim.Adam
-optimizer_args = {'lr': 0.00009, 'weight_decay': 0, "amsgrad": True}
+optimizer_args = config['optimizer_args']
 
 optimizer_g = optimizer_type(g_params, **optimizer_args)
 if hasattr(model, 'spatial_discriminator'):
@@ -907,68 +901,70 @@ else:
     optimizer_d_t = None
 
 
+# Now you can use the config dictionary to access your configurations
+losses = {
+    "StyleLoss": (module_loss.StyleLoss(), config['losses']["StyleLoss"][0]),
+    "VGGLoss": (module_loss.VGGLoss(), config['losses']["VGGLoss"][0]),
+    "ExpressionLoss": (module_loss.ExpressionLoss(), config['losses']["ExpressionLoss"][0]),
+    "ReconLoss": (module_loss.ReconLoss(masked=False), config['losses']["ReconLoss"][0]),
+    "ReconLoss_masked": (module_loss.ReconLoss(masked=True), config['losses']["ReconLoss"][1]),
+    "CompleteFramesReconLoss": (module_loss.CompleteFramesReconLoss(), config['losses']["CompleteFramesReconLoss"][0]),
+}
 
 
-resume = None
-n_gpu = 1
-epochs = 200
-save_freq = 5
-verbosity = 5
-pretrained_load_strict = False
-monitor = 'val_metrics'
-monitor_mode = 'min'
-save_dir = './testdence'
-name = 'video_inpainting'
-log_dir = './testdence_logs'
-tensorboardX = True
-# CVMP: 990, 0.95
-lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer_g, step_size=990, gamma=0.95)
-# lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_g, mode='min', factor=0.1, patience=5, threshold=1e-4, cooldown=1, min_lr=1e-5, eps=1e-8)
+optimizer_args = config['optimizer_args']
+epochs = config['epochs']
+n_gpu = config['n_gpu']
+save_freq = config['save_freq']
+verbosity = config['verbosity']
+pretrained_load_strict = config['pretrained_load_strict']
+monitor = config['monitor']
+monitor_mode = config['monitor_mode']
+save_dir = config['save_dir']
+name = config['name']
+log_dir = config['log_dir']
+tensorboardX = config['tensorboardX']
+lr_scheduler_config = config['lr_scheduler']
+lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer_g, step_size=lr_scheduler_config['step_size'], gamma=lr_scheduler_config['gamma'])
+pretrained_path = config['pretrained_path']
+root_videos_dir = config['root_videos_dir']
+root_masks_dir = config['root_masks_dir']
+root_outputs_dir = config['root_outputs_dir']
+root_reference_frames_dir = config['root_reference_frames_dir']
+batch_size = config['batch_size']
+shuffle = config['shuffle']
+validation_split = config['validation_split']
+num_workers = config['num_workers']
+dataset_args = config['dataset_args']
+root_videos_dir_T = config['root_videos_dir_T']
+root_masks_dir_T = config['root_masks_dir_T']
+root_reference_frames_dir_T = config['root_reference_frames_dir_T']
+dataset_args_T = config['dataset_args_T']
+shuffle_T = config['shuffle']
+log_step = config['log_step']
+loss_gan_s_w = config['loss_gan_s_w']
+loss_gan_t_w = config['loss_gan_t_w']
+resume = config['resume']
+evaluate_score = config['evaluate_score']
+store_gated_values = config['store_gated_values']
+printlog = config['printlog']
+valid_data_loader = config['valid_data_loader']
 
-
-root_videos_dir = '/home/ghorbani/PhD/inpainting/Free-Form-Video-Inpainting-master/dataset/FaceForensics/Train/videos'
-root_masks_dir = '/home/ghorbani/Face_Forensics/Train/Mask'
-root_reference_frames_dir = "/home/ghorbani/Face_Forensics/Train/Ref"
-
-#root_reference_frames_dir = "/home/ghorbani/preProcessing_Refs/Train_Filtered_Refs"
-
-root_outputs_dir = ""
-dataset_args = {'type': 'video', 'sample_length': 32, 'random_sample': False, 'random_sample_mask': False, 'w': 128, 'h': 128, 'mask_type': "from_start", "do_augment": True, "guidance": "landmarks"}
-batch_size = 1
-shuffle = False
-validation_split = 0.0
-num_workers = 4
-# Instantiate the data loader
 data_loader = MaskedFrameDataLoader(
     root_videos_dir, root_masks_dir, root_outputs_dir, root_reference_frames_dir,
     dataset_args,
     batch_size, shuffle, validation_split,
     num_workers
 )
-
-root_videos_dir_T = '/home/ghorbani/Face_Forensics/Test/GT'
-root_masks_dir_T = '/home/ghorbani/Face_Forensics/Test/Mask'
-
-#root_reference_frames_dir_T = "/home/ghorbani/preProcessing_Refs/Test_Filtered_Refs"
-
-root_reference_frames_dir_T = "/home/ghorbani/Face_Forensics/Test/Ref"
-
-dataset_args_T = {'type': 'video', 'sample_length': 32, 'random_sample': False, 'random_sample_mask': False, 'w': 128, 'h': 128, 'mask_type': "from_start", "guidance": "landmarks"}
-batch_size = 1
-shuffle_T = False
-validation_split = 0.0
-num_workers = 4
-# Instantiate the data loader
 data_loader_T = MaskedFrameDataLoader(
     root_videos_dir_T, root_masks_dir_T, root_outputs_dir, root_reference_frames_dir_T,
     dataset_args_T,
     batch_size, shuffle_T, validation_split, num_workers)
 
-
-# (only temporal) first check the model to run with t discriminator and then update pretrained parameters and loss_gan_t_w initial values to 1 ( t or both)
+# Run your training process
 trainer = Trainer(
     model, losses, metrics, optimizer_g, optimizer_d_s, optimizer_d_t,
-    resume=None,
+    resume=resume,
     n_gpu=n_gpu,
     epochs=epochs,
     save_freq=save_freq,
@@ -981,20 +977,21 @@ trainer = Trainer(
     log_dir=log_dir,
     tensorboardX=tensorboardX,
     data_loader=data_loader,
-    valid_data_loader=None,
+    valid_data_loader=valid_data_loader,
     lr_scheduler=lr_scheduler,
     train_logger=Logger(),
     test_data_loader=data_loader_T,
-    pretrained_path=None,
-    log_step=40,
-    loss_gan_s_w=0,
-    loss_gan_t_w=0,
-    evaluate_score=False,
-    store_gated_values=False,
-    printlog=True,
+    pretrained_path=pretrained_path,
+    log_step=log_step,
+    loss_gan_s_w=loss_gan_s_w,
+    loss_gan_t_w=loss_gan_t_w,
+    evaluate_score=evaluate_score,
+    store_gated_values=store_gated_values,
+    printlog=printlog,
 )
 
-output_root_dir = None
+output_root_dir = config['output_root_dir']
+
 if output_root_dir is not None:
         make_dirs(output_root_dir)
         trainer.printlog = True
