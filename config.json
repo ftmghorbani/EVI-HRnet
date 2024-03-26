@@ -1,0 +1,97 @@
+{
+    "model_config": {
+        "norm": "SN",
+        "nf": 64,
+        "bias": true,
+        "conv_type": "gated",
+        "conv_by": "2dtsm",
+        "temporal_discriminator": false,
+        "spatial_discriminator": false
+      },
+      "nc_in": 5,
+      "nc_out": 3,
+      "nc_ref": 3,
+      "d_s_args": {
+        "nf": 64,
+        "use_sigmoid": true,
+        "norm": "SN"
+      },
+      "d_t_args": {
+        "nf": 64,
+        "use_sigmoid": true,
+        "norm": "SN",
+        "conv_type": "vanilla",
+        "conv_by": "2dtsm"
+      },   
+    "losses": {
+        "StyleLoss": [10],
+        "VGGLoss": [1.0],
+        "ExpressionLoss": [1],
+        "ReconLoss": [1.0, 0],
+        "CompleteFramesReconLoss": [1.0]
+    },
+    "loss_gan_s_w": 0,
+    "loss_gan_t_w": 0,
+    "optimizer_args": {
+      "lr": 0.000097,
+      "weight_decay": 0,
+      "amsgrad": true
+    },
+    "n_gpu": 1,  
+    "epochs": 400,
+    "save_freq": 5,
+    "verbosity": 5,
+    "pretrained_load_strict": false,
+    "monitor": "fid_score",
+    "monitor_mode": "min",
+    "save_dir": "./testdence_noLM",
+    "name": "video_inpainting",
+    "log_dir": "./testdence_logs",
+    "tensorboardX": true,
+    "lr_scheduler": {
+      "step_size": 990,
+      "gamma": 0.95
+    },
+    "pretrained_path": null, 
+    "root_videos_dir": "/home/ghorbani/PhD/inpainting/Free-Form-Video-Inpainting-master/dataset/FaceForensics/Train/videos",
+    "root_masks_dir": "/home/ghorbani/Face_Forensics/Train/Mask",
+    "root_reference_frames_dir": "/home/ghorbani/Face_Forensics/Train/Ref",
+    "root_videos_dir_T": "/home/ghorbani/Face_Forensics/Test/GT",
+    "root_masks_dir_T": "/home/ghorbani/Face_Forensics/Test/Mask",
+    "root_reference_frames_dir_T": "/home/ghorbani/Face_Forensics/Test/Ref",
+    "root_outputs_dir": "./NoLMInp",
+    "dataset_args": {
+      "type": "video",
+      "sample_length": 32,
+      "random_sample": false,
+      "random_sample_mask": false,
+      "w": 128,
+      "h": 128,
+      "mask_type": "from_start",
+      "do_augment": false,
+      "guidance": null
+    },
+    "dataset_args_T": {
+        "type": "video",
+        "sample_length": 32,
+        "random_sample": false,
+        "random_sample_mask": false,
+        "w": 128,
+        "h": 128,
+        "mask_type": "from_start",
+        "do_augment": false,
+        "guidance": null
+      },
+    "valid_data_loader": null,
+    "batch_size": 1,
+    "shuffle": false,
+    "validation_split": 0.0,
+    "num_workers": 4,
+    "output_root_dir": null,
+    "log_step": 400,
+    "resume": "/home/ghorbani/MyCode_VidInp/CVMP2023/Best_checkpoints_higherLOSS_withL1/video_inpainting/0511_153505/checkpoint-epoch200.pth",
+    "evaluate_score": true,
+    "store_gated_values": false,
+    "printlog": true
+  }
+  
